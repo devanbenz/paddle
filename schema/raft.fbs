@@ -1,0 +1,63 @@
+namespace RaftSchema;
+
+union MessageType {
+    AppendEntriesRequest,
+    AppendEntriesResponse,
+    RequestVoteRequest,
+    RequestVoteResponse,
+    ConsoleRequest,
+    ConsoleResponse
+}
+
+table LogEntry {
+  term:int;
+  command:string;
+}
+
+table AppendEntriesRequest {
+  type:int = 1;
+  term:int;
+  leader_id:int;
+  prev_log_idx:int;
+  prev_log_term:int;
+  leader_commit:int;
+  dest:int;
+  entries:[LogEntry];
+}
+
+table AppendEntriesResponse {
+    success:bool;
+    term:int;
+    match_index:int;
+    from_node_id:int;
+    to_node_id:int;
+}
+
+table RequestVoteRequest {
+    from:int;
+    to:int;
+    term:int;
+    last_log_index:int;
+    last_log_term:int;
+}
+
+table RequestVoteResponse {
+    from:int;
+    to:int;
+    term:int;
+    granted:bool;
+}
+
+table ConsoleRequest {
+  command:string;
+}
+
+table ConsoleResponse {
+  ok:string;
+}
+
+table Message {
+  message:MessageType;
+}
+
+root_type Message;

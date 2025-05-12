@@ -1,0 +1,22 @@
+namespace Console;
+
+// Define possible message types
+union MessageType {
+  ConsoleRequest,
+  ConsoleResponse
+}
+
+table ConsoleRequest {
+  command:string;
+}
+
+table ConsoleResponse {
+  ok:string;
+}
+
+// Wrapper message that can contain either type
+table Message {
+  message:MessageType;  // This will tell you which type is stored
+}
+
+root_type Message;
