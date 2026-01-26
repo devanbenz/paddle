@@ -34,13 +34,9 @@ void handler(int sig) {
     size_t size;
     char **strings;
 
-    // Get backtrace addresses
     size = backtrace(array, 20);
-
-    // Get the backtrace as strings
     strings = backtrace_symbols(array, size);
 
-    // Print the backtrace
     fprintf(stderr, "Error: signal %d\n", sig);
 
     for (size_t i = 0; i < size; i++) {
@@ -69,7 +65,7 @@ int main(int argc, char *argv[]) {
     sigaction(SIGINT, &sigIntAction, nullptr);
 
     RaftLogInMem log(RaftLogInMem::NewLogEntry(0, ""));
-    auto config = RaftConfig(5, 10000);
+    auto config = RaftConfig(3, 10000);
     auto raft = RaftNode(std::move(log), config, node, 1,FOLLOWER);
 
 

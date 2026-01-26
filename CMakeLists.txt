@@ -33,7 +33,7 @@ CPMAddPackage("gh:gabime/spdlog#v1.15.2")
 CPMAddPackage(
         NAME gflags
         GITHUB_REPOSITORY gflags/gflags
-        VERSION 2.2.2
+        VERSION 2.3.0
         OPTIONS "REGISTER_INSTALL_PREFIX OFF" "BUILD_SHARED_LIBS OFF"
 )
 CPMAddPackage(

@@ -12,15 +12,15 @@ bool RaftLogInMem::AppendEntries(int term, int leader_id, int prev_log_idx, int 
         return false;
     }
 
-    // If the previous log index does not equal our log index
-    if (buffer.size() < prev_log_idx) {
-        spdlog::warn("buffer.size() [{}] < prev_log_idx [{}]", buffer.size(), prev_log_idx);
+    if (buffer.size() < prev_log_idx || buffer.size() ==  0) {
         return false;
     }
 
-    // We've check buffer size about, need to ensure that
-    // the previous log term and prev current buffer term
-    // are the same.
+    // TODO: This currently segfaults
+    spdlog::warn("buffer size: {}", buffer.size());
+    for (auto entry : buffer) {
+        spdlog::warn("current buffer: term={}", buffer.size(), entry.term);
+    }
     if (buffer[prev_log_idx].term != prev_log_term) {
         spdlog::warn("buffer[prev_log_idx].term [{}] != prev_log_term [{}]", buffer[prev_log_idx].term, prev_log_term);
         return false;

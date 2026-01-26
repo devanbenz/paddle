@@ -28,17 +28,17 @@ int main(int argc, char *argv[]) {
 
     auto acceptor = std::async(std::launch::async, [&]() {
         while (running) {
-            auto acceptor = tcp_server.Accept();
+            auto client_acceptor = tcp_server.Accept();
             spdlog::info("client connected...");
 
             clients.push_back(
                     std::async(
-                            std::launch::async, [acceptor, &internal_store, &snapshotter, &latch]() {
+                            std::launch::async, [client_acceptor, &internal_store, &snapshotter, &latch]() {
                                 while (true) {
-                                    auto msg = acceptor.ReceiveMessage();
+                                    auto msg = client_acceptor.ReceiveMessage();
                                     if (std::strlen(msg.data()) > 0) {
                                         if (msg == "exit") {
-                                            acceptor.CloseAcceptor();
+                                            client_acceptor.CloseAcceptor();
                                             break;
                                         }
                                     } else {
@@ -51,10 +51,10 @@ int main(int argc, char *argv[]) {
                                     spdlog::info(get_op(data));
 
                                     latch.lock();
-                                    run_command(data, internal_store, acceptor, snapshotter);
+                                    run_command(data, internal_store, client_acceptor, snapshotter);
                                     latch.unlock();
                                 }
-                                acceptor.CloseAcceptor();
+                                client_acceptor.CloseAcceptor();
                             }));
         }
     });

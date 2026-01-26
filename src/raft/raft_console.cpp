@@ -28,7 +28,7 @@ private:
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, false);
     if (FLAGS_node == -1) {
-        std::cerr << "Please seta node number with --node" << std::endl;
+        std::cerr << "Please set a node number with --node" << std::endl;
         return -1;
     }
 

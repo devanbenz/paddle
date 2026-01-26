@@ -7,7 +7,7 @@
 class RaftLogBase {
 public:
     struct LogEntry {
-        int term;
+        int term{};
         std::string command;
     } typedef LogEntry;
 

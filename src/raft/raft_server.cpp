@@ -82,9 +82,9 @@ void RaftServer::Start() {
 
                             latch_.lock();
                             RaftNode::AppendEntriesRPC append_entries_rpc;
-                            RaftNode::AppendEntriesResponseRPC append_entries_response_rpc;
-                            RaftNode::RequestVoteRpc request_vote_rpc;
-                            RaftNode::RequestVoteResponseRPC request_vote_response_rpc;
+                            RaftNode::AppendEntriesResponseRPC append_entries_response_rpc{};
+                            RaftNode::RequestVoteRpc request_vote_rpc{};
+                            RaftNode::RequestVoteResponseRPC request_vote_response_rpc{};
                             ReceiveMessageByType(msg, &append_entries_rpc, &append_entries_response_rpc,
                                                  &request_vote_rpc,
                                                  &request_vote_response_rpc);
@@ -95,10 +95,8 @@ void RaftServer::Start() {
                                     console_buffer_.pop_back();
                                     acceptor.SendBuffer(data.first, data.second);
                                 }
-                            } else {
-                                acceptor.CloseAcceptor();
                             }
-
+                            acceptor.CloseAcceptor();
                             latch_.unlock();
                         }));
                     }
@@ -138,9 +136,9 @@ void RaftServer::Start() {
                 auto msg = acceptor.ReceiveBuffer();
                 latch_.lock();
                 RaftNode::AppendEntriesRPC append_entries_rpc;
-                RaftNode::AppendEntriesResponseRPC append_entries_response_rpc;
-                RaftNode::RequestVoteRpc request_vote_rpc;
-                RaftNode::RequestVoteResponseRPC request_vote_response_rpc;
+                RaftNode::AppendEntriesResponseRPC append_entries_response_rpc{};
+                RaftNode::RequestVoteRpc request_vote_rpc{};
+                RaftNode::RequestVoteResponseRPC request_vote_response_rpc{};
                 ReceiveMessageByType(msg, &append_entries_rpc, &append_entries_response_rpc, &request_vote_rpc,
                                      &request_vote_response_rpc);
                 latch_.unlock();
@@ -266,7 +264,7 @@ void RaftServer::TryElection() {
                     tmp_stream.SendBuffer(request_buf, total_size);
                     tmp_stream.CloseSocket();
                 } catch (const std::exception &e) {
-                    spdlog::info("RaftServer::TryElection: {}", e.what());
+                    spdlog::error("RaftServer::TryElection: {}", e.what());
                 }
                 latch_.unlock();
             }
@@ -278,9 +276,9 @@ void RaftServer::TryElection() {
             auto acceptor = Accept();
             auto msg = acceptor.ReceiveBuffer();
             RaftNode::AppendEntriesRPC append_entries_rpc;
-            RaftNode::AppendEntriesResponseRPC append_entries_response_rpc;
-            RaftNode::RequestVoteRpc request_vote_rpc;
-            RaftNode::RequestVoteResponseRPC request_vote_response_rpc;
+            RaftNode::AppendEntriesResponseRPC append_entries_response_rpc{};
+            RaftNode::RequestVoteRpc request_vote_rpc{};
+            RaftNode::RequestVoteResponseRPC request_vote_response_rpc{};
             ReceiveMessageByType(msg, &append_entries_rpc, &append_entries_response_rpc, &request_vote_rpc,
                                  &request_vote_response_rpc);
             if (Node()->State() == LEADER) {
