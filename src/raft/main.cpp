@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     sigaction(SIGINT, &sigIntAction, nullptr);
 
     RaftLogInMem log(RaftLogInMem::NewLogEntry(0, ""));
-    auto config = RaftConfig(3, 10000);
+    auto config = RaftConfig(5, 10000);
     auto raft = RaftNode(std::move(log), config, node, 1,FOLLOWER);
 
 

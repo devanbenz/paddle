@@ -16,7 +16,6 @@ bool RaftLogInMem::AppendEntries(int term, int leader_id, int prev_log_idx, int 
         return false;
     }
 
-    // TODO: This currently segfaults
     spdlog::warn("buffer size: {}", buffer.size());
     for (auto entry : buffer) {
         spdlog::warn("current buffer: term={}", buffer.size(), entry.term);

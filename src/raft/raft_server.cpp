@@ -6,6 +6,8 @@
 
 #include "raft_generated.h"
 
+// TODO: Currently when a candidate becomes a follower the log doesn't persist
+// the current term. I need to fix this issue because it's causing election failure.
 RaftServer::RaftServer(RaftNode node) : node_(std::move(node)), listener_(nullptr), stream_(nullptr) {
 }
 
@@ -53,6 +55,9 @@ void RaftServer::Start() {
                             case CANDIDATE:
                                 spdlog::info("Node State: CANDIDATE");
                                 break;
+                        }
+                        if (Node()->GetLogBuffer().empty()) {
+                            spdlog::info("Log: [ no entries ]");
                         }
                         for (auto log: Node()->GetLogBuffer()) {
                             spdlog::info("LogEntry: [ {}, {} ]", log.term, log.command);
@@ -141,6 +146,7 @@ void RaftServer::Start() {
                 RaftNode::RequestVoteResponseRPC request_vote_response_rpc{};
                 ReceiveMessageByType(msg, &append_entries_rpc, &append_entries_response_rpc, &request_vote_rpc,
                                      &request_vote_response_rpc);
+                acceptor.CloseAcceptor();
                 latch_.unlock();
             }
         }
@@ -233,6 +239,7 @@ void RaftServer::TryElection() {
                 .to_node_id = server.id,
                 .term = Node()->MyTerm(),
             };
+            spdlog::info("TryElection() triggered, sending a vote");
             Node()->Send(std::nullopt, std::nullopt, vote);
         }
     }
@@ -335,7 +342,7 @@ uint8_t *RaftServer::PackageAppendEntries(RaftNode::AppendEntriesRPC rpc, int &t
 
     uint8_t *buffer_pointer = builder.GetBufferPointer();
 
-    uint8_t *return_buffer = new uint8_t[total_size];
+    auto *return_buffer = new uint8_t[total_size];
     memcpy(return_buffer, buffer_pointer, total_size);
 
     return return_buffer;
