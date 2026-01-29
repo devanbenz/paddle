@@ -89,6 +89,6 @@ private:
     int size_{1};
     int curr_term_{0};
     int curr_leader_id_{0};
-    int curr_prev_log_idx_{1};
+    int curr_prev_log_idx_{0};
 };
 

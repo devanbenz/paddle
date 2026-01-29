@@ -32,6 +32,8 @@ bool RaftLogInMem::AppendEntries(int term, int leader_id, int prev_log_idx, int 
 
     // Okay, but what if we have a conflict! Truncation time.
     if (curr_prev_log_idx_ > prev_log_idx && buffer[prev_log_idx].term != term) {
+        spdlog::warn("curr_prev_log_idx_={} prev_log_idx={} buffer[prev_log_idx].term={} term={}", curr_prev_log_idx_, prev_log_idx, buffer[prev_log_idx].term, term);
+        spdlog::warn("TRUNCATING LOG");
         Truncate(prev_log_idx);
     }
 

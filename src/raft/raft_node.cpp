@@ -225,8 +225,8 @@ void RaftNode::Receive(
             }
             break;
         }
-        // TODO: Leader election
         case CANDIDATE: {
+            spdlog::info("Receiving message as CANDIDATE...");
             //TODO the case where a candidate receives a AppendEntries (Should turn it in to a follower)
             if (app.has_value()) {
                 state_ = FOLLOWER;
