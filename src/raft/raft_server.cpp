@@ -292,6 +292,7 @@ void RaftServer::TryElection() {
                 spdlog::info("I AM A LEADER");
                 election.store(false);
             }
+            acceptor.CloseAcceptor();
         }
     });
 
@@ -552,6 +553,9 @@ void RaftServer::ReceiveMessageByType(
     RaftNode::RequestVoteRpc *request_vote_rpc = nullptr,
     RaftNode::RequestVoteResponseRPC *request_vote_response_rpc = nullptr
 ) {
+    if (this->Node()->State() == CANDIDATE) {
+        spdlog::info("Node is CANDIDATE and received a message: size={}", msg.size());
+    }
     if (msg.empty() || msg.size() < sizeof(flatbuffers::uoffset_t)) {
         spdlog::error("Received invalid message buffer: size={}", msg.size());
         return;
@@ -566,11 +570,15 @@ void RaftServer::ReceiveMessageByType(
     try {
         RaftSchema::MessageType message_type = message->message_type();
 
+
         switch (message_type) {
             case RaftSchema::MessageType_NONE:
                 spdlog::debug("Received NONE message type");
                 break;
             case RaftSchema::MessageType_AppendEntriesRequest:
+                if (this->Node()->State() == CANDIDATE) {
+                    spdlog::info("CANDIDATE message: type=AppendEntries");
+                }
                 if (append_entries_rpc) {
                     *append_entries_rpc = UnpackageAppendEntries(msg);
                     Node()->Receive(std::nullopt, *append_entries_rpc, std::nullopt, std::nullopt);
@@ -587,6 +595,9 @@ void RaftServer::ReceiveMessageByType(
                 }
                 break;
             case RaftSchema::MessageType_RequestVoteRequest:
+                if (this->Node()->State() == CANDIDATE) {
+                    spdlog::info("CANDIDATE message: type=RequestVoteRequest");
+                }
                 if (request_vote_rpc) {
                     *request_vote_rpc = UnpackageRequestVote(msg);
                     spdlog::info("Got a vote request");

@@ -161,6 +161,9 @@ void RaftNode::Receive(
                     Replay(response.match_index, response.from_node_id);
                 }
             }
+            if (request_vote.has_value()) {
+
+            }
             if (request_vote_response.has_value()) {
                 break;
             }
