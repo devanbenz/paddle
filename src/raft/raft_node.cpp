@@ -6,6 +6,12 @@ void RaftNode::SetState(const NodeState state) {
     state_ = state;
 }
 
+void RaftNode::ResetVotes() {
+    for (auto &peer : peers_) {
+        peer.second.vote_granted_ = false;
+    }
+}
+
 RaftConfig RaftNode::Config() const {
     return config_;
 }
@@ -25,10 +31,10 @@ void RaftNode::Send(
             }
 
             AppendEntriesRPC rpc = {
-                .entries = entries,
                 .term = my_term_,
-                // todo: store leader id
                 .leader_id = my_id_,
+                .prev_log_term = my_term_-1,
+                .entries = entries,
             };
 
             // This is a heartbeat I don't need to append it
@@ -106,6 +112,19 @@ void RaftNode::Receive(
     std::optional<RequestVoteRpc> request_vote,
     std::optional<RequestVoteResponseRPC> request_vote_response
 ) {
+    int incoming_term = 0;
+    if (res.has_value()) incoming_term = res.value().term;
+    else if (app.has_value()) incoming_term = app.value().term;
+    else if (request_vote.has_value()) incoming_term = request_vote.value().term;
+    else if (request_vote_response.has_value()) incoming_term = request_vote_response.value().term;
+
+    if (incoming_term > my_term_) {
+        spdlog::info("Stepping down: saw term {} > my term {}", incoming_term, my_term_);
+        my_term_ = incoming_term;
+        SetState(FOLLOWER);
+        ResetVotes();
+    }
+
     switch (state_) {
         case LEADER: {
             if (res.has_value()) {
@@ -162,10 +181,10 @@ void RaftNode::Receive(
                 }
             }
             if (request_vote.has_value()) {
-
+                spdlog::warn("As a leader I recieved a vote request from node={}, should respond and tell them I am leader.", request_vote.value().from_node_id);
             }
             if (request_vote_response.has_value()) {
-                break;
+                spdlog::warn("As a leader I recieved a vote response from node={}, should respond and tell them I am leader.", request_vote_response.value().from_node_id);
             }
             break;
         }
@@ -195,7 +214,12 @@ void RaftNode::Receive(
                     vote_response_rpc.vote_granted = false;
                 }
 
-                spdlog::info("Sending vote respons in to buffer...");
+                if (vote_response_rpc.vote_granted) {
+                    peers_[my_id_].vote_granted_ = true;
+                    my_term_ = vote_value.term;
+                }
+
+                spdlog::info("Sending vote response to buffer, granted={}", vote_response_rpc.vote_granted);
                 request_vote_response_buffer_.push_back(vote_response_rpc);
             }
             if (app.has_value()) {
@@ -232,8 +256,9 @@ void RaftNode::Receive(
             spdlog::info("Receiving message as CANDIDATE...");
             //TODO the case where a candidate receives a AppendEntries (Should turn it in to a follower)
             if (app.has_value()) {
-                state_ = FOLLOWER;
                 const auto &append_entries = app.value();
+                SetState(FOLLOWER);
+                my_leader_id_ = append_entries.leader_id;
                 auto ok = log_.AppendEntries(
                     append_entries.term,
                     append_entries.leader_id,
@@ -262,9 +287,19 @@ void RaftNode::Receive(
                 break;
             }
 
+            if (request_vote.has_value()) {
+                auto vote_value = request_vote.value();
+                auto vote_response_rpc = RequestVoteResponseRPC{
+                    .from_node_id = my_id_,
+                    .to_node_id = vote_value.from_node_id,
+                    .term = my_term_,
+                    .vote_granted = false,
+                };
+                request_vote_response_buffer_.push_back(vote_response_rpc);
+                break;
+            }
+
             if (request_vote_response.has_value()) {
-                // TODO Check the voting response
-                // -> Set peers to vote granted true/false, check peers vote granted, if majority become leader and send heartbeat.
                 int nodes_granted_vote = 0;
                 auto vote_response = request_vote_response.value();
                 assert(vote_response.to_node_id == my_id_);
@@ -282,6 +317,7 @@ void RaftNode::Receive(
 
                     for (auto peer: peers_) {
                         // Should send a heartbeat to all peers
+                        spdlog::warn("Sending heartbeat to peer = {}", peer.first);
                         Send({}, std::nullopt, std::nullopt);
                     }
                 }

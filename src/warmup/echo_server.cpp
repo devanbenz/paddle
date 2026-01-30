@@ -10,20 +10,18 @@ int main() {
         while (running) {
             auto acceptor = tcp_server.Accept();
 
-            clients.push_back(std::async(std::launch::async, [acceptor] {
+            clients.push_back(std::async(std::launch::async, [acc = std::move(acceptor)] {
                 while (true) {
-                    auto msg = acceptor.ReceiveMessage();
+                    auto msg = acc.ReceiveMessage();
                     if (std::strlen(msg.data()) > 0) {
                         std::cout << "client said: " << msg << std::endl;
                         if (msg == "exit") {
-                            acceptor.CloseAcceptor();
                             break;
                         }
                     }
                     auto bytes = msg.data();
-                    acceptor.SendMessage(bytes);
+                    acc.SendMessage(bytes);
                 }
-                acceptor.CloseAcceptor();
             }));
 
         }

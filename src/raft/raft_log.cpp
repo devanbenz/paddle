@@ -16,10 +16,6 @@ bool RaftLogInMem::AppendEntries(int term, int leader_id, int prev_log_idx, int 
         return false;
     }
 
-    spdlog::warn("buffer size: {}", buffer.size());
-    for (auto entry : buffer) {
-        spdlog::warn("current buffer: term={}", buffer.size(), entry.term);
-    }
     if (buffer[prev_log_idx].term != prev_log_term) {
         spdlog::warn("buffer[prev_log_idx].term [{}] != prev_log_term [{}]", buffer[prev_log_idx].term, prev_log_term);
         return false;

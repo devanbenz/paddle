@@ -82,8 +82,8 @@ void RaftServer::Start() {
                     while (running) {
                         spdlog::info("Waiting for new connection...");
                         auto acceptor = Accept();
-                        clients.push_back(std::async(std::launch::async, [acceptor, &my_config, &running, this]() {
-                            auto msg = acceptor.ReceiveBuffer();
+                        clients.push_back(std::async(std::launch::async, [acc = std::move(acceptor), &my_config, &running, this]() mutable {
+                            auto msg = acc.ReceiveBuffer();
 
                             latch_.lock();
                             RaftNode::AppendEntriesRPC append_entries_rpc;
@@ -98,10 +98,9 @@ void RaftServer::Start() {
                                 for (int i = 0; i < console_buffer_.size(); ++i) {
                                     auto data = console_buffer_.back();
                                     console_buffer_.pop_back();
-                                    acceptor.SendBuffer(data.first, data.second);
+                                    acc.SendBuffer(data.first, data.second);
                                 }
                             }
-                            acceptor.CloseAcceptor();
                             latch_.unlock();
                         }));
                     }
@@ -111,10 +110,9 @@ void RaftServer::Start() {
                     handle.wait();
                 }
             }
-            // Create random number generator
             std::random_device rd;
             std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dist(5000, 10000);
+            std::uniform_int_distribution<> dist(100, 500);
 
             while (!is_leader) {
                 if (Node()->State() == LEADER) {
@@ -133,7 +131,7 @@ void RaftServer::Start() {
                 if (status == std::future_status::timeout) {
                     spdlog::info("Accept() timed out after {} ms, becoming a candidate", timeout_ms);
                     TryElection();
-                    spdlog::info("Election votes sent");
+                    spdlog::info("Election finished");
                     continue;
                 }
 
@@ -172,14 +170,13 @@ void RaftServer::Start() {
                     auto destination = Node()->Config().GetOneByIndex(rpc.dest);
                     latch_.unlock();
                     std::thread sender([buffer, destination, total_size, this]() {
-                        latch_.lock();
                         if (total_size <= 0) {
                             spdlog::warn("Attempting to send a 0 length append_entry buffer from node {}",
                                          Node()->ID());
+                            delete[] buffer;
                             return;
                         }
                         SendMessage(destination.id, buffer, total_size);
-                        latch_.unlock();
                     });
                     sender.detach();
                 }
@@ -197,14 +194,13 @@ void RaftServer::Start() {
                     auto buffer = RaftServer::PackageRequestVoteResponse(rpc, total_size);
                     latch_.unlock();
                     std::thread sender([send_to, buffer, total_size, this]() {
-                        latch_.lock();
                         if (total_size <= 0) {
                             spdlog::warn("Attempting to send a 0 length vote response buffer from node {}",
                                          Node()->ID());
+                            delete[] buffer;
                             return;
                         }
                         SendMessage(send_to.id, buffer, total_size);
-                        latch_.unlock();
                     });
                     sender.detach();
                 }
@@ -231,6 +227,7 @@ void RaftServer::Start() {
 void RaftServer::TryElection() {
     std::atomic<bool> election(true);
     Node()->SetState(CANDIDATE);
+    Node()->ResetVotes();
     Node()->MyTerm()++;
     for (auto &server: Node()->Config().GetAll()) {
         if (server.id != Node()->ID()) {
@@ -261,19 +258,22 @@ void RaftServer::TryElection() {
 
                 int total_size = 0;
                 auto request_buf = PackageRequestVote(vote, total_size);
-                auto tmp_stream = TcpStream(send_to.address, send_to.port);
+                latch_.unlock();
+
+                if (total_size <= 0) {
+                    spdlog::warn("Attempting to send a 0 length vote buffer from {}", Node()->ID());
+                    delete[] request_buf;
+                    continue;
+                }
+
                 try {
+                    TcpStream tmp_stream(send_to.address, send_to.port);
                     tmp_stream.Connect();
-                    if (total_size <= 0) {
-                        spdlog::warn("Attempting to send a 0 length vote buffer from {}", Node()->ID());
-                        continue;
-                    }
                     tmp_stream.SendBuffer(request_buf, total_size);
-                    tmp_stream.CloseSocket();
                 } catch (const std::exception &e) {
                     spdlog::error("RaftServer::TryElection: {}", e.what());
                 }
-                latch_.unlock();
+                delete[] request_buf;
             }
         }
     });
@@ -290,6 +290,9 @@ void RaftServer::TryElection() {
                                  &request_vote_response_rpc);
             if (Node()->State() == LEADER) {
                 spdlog::info("I AM A LEADER");
+                election.store(false);
+            } else if (Node()->State() == FOLLOWER) {
+                spdlog::info("Stepped down to FOLLOWER during election");
                 election.store(false);
             }
             acceptor.CloseAcceptor();
@@ -461,7 +464,7 @@ uint8_t *RaftServer::PackageRequestVote(RaftNode::RequestVoteRpc rpc, int &total
 }
 
 RaftNode::RequestVoteRpc RaftServer::UnpackageRequestVote(std::vector<uint8_t> msg) {
-    RaftNode::RequestVoteRpc rpc;
+    RaftNode::RequestVoteRpc rpc{};
     auto message = RaftSchema::GetMessage(msg.data());
 
     switch (message->message_type()) {
@@ -503,14 +506,14 @@ uint8_t *RaftServer::PackageRequestVoteResponse(RaftNode::RequestVoteResponseRPC
 
     uint8_t *buffer_pointer = builder.GetBufferPointer();
 
-    uint8_t *return_buffer = new uint8_t[total_size];
+    auto *return_buffer = new uint8_t[total_size];
     memcpy(return_buffer, buffer_pointer, total_size);
 
     return return_buffer;
 }
 
 RaftNode::RequestVoteResponseRPC RaftServer::UnpackageRequestVoteResponse(std::vector<uint8_t> msg) {
-    RaftNode::RequestVoteResponseRPC rpc;
+    RaftNode::RequestVoteResponseRPC rpc{};
     auto message = RaftSchema::GetMessage(msg.data());
 
     switch (message->message_type()) {
@@ -529,21 +532,26 @@ RaftNode::RequestVoteResponseRPC RaftServer::UnpackageRequestVoteResponse(std::v
 }
 
 void RaftServer::SendMessage(int node_id, uint8_t *msg, int total_size) {
-    std::atomic<bool> retrying{true};
     auto config = node_.Config().GetOneByIndex(node_id);
-    auto conn = TcpStream(config.address, config.port);
-    while (retrying)
+    constexpr int max_retries = 5;
+
+    for (int attempt = 0; attempt < max_retries; attempt++) {
+        TcpStream conn(config.address, config.port);
         try {
             conn.Connect();
             uint32_t size = htonl(total_size);
             send(conn.GetSocket(), &size, sizeof(size), 0);
             send(conn.GetSocket(), msg, total_size, 0);
-            conn.CloseSocket();
-
-            retrying = false;
+            delete[] msg;
+            return;
         } catch (const std::system_error &e) {
-            sleep(1);
+            if (attempt < max_retries - 1) {
+                sleep(1);
+            }
         }
+    }
+    spdlog::error("SendMessage: failed to send to node {} after {} retries", node_id, max_retries);
+    delete[] msg;
 }
 
 void RaftServer::ReceiveMessageByType(

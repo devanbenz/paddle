@@ -13,8 +13,31 @@ class ClientAcceptor {
 public:
     ClientAcceptor(int acceptor_fd) : acceptor_(acceptor_fd) {}
 
-    void CloseAcceptor() const {
-        close(acceptor_);
+    ~ClientAcceptor() {
+        if (acceptor_ != -1) close(acceptor_);
+    }
+
+    ClientAcceptor(ClientAcceptor&& other) noexcept : acceptor_(other.acceptor_) {
+        other.acceptor_ = -1;
+    }
+
+    ClientAcceptor& operator=(ClientAcceptor&& other) noexcept {
+        if (this != &other) {
+            if (acceptor_ != -1) close(acceptor_);
+            acceptor_ = other.acceptor_;
+            other.acceptor_ = -1;
+        }
+        return *this;
+    }
+
+    ClientAcceptor(const ClientAcceptor&) = delete;
+    ClientAcceptor& operator=(const ClientAcceptor&) = delete;
+
+    void CloseAcceptor() {
+        if (acceptor_ != -1) {
+            close(acceptor_);
+            acceptor_ = -1;
+        }
     }
 
     [[nodiscard]] std::vector<uint8_t> ReceiveBuffer() const {
@@ -145,7 +168,28 @@ public:
         addrlen_ = addrs->ai_addrlen;
     }
 
-    ~TcpStream() = default;
+    ~TcpStream() {
+        if (socket_ != -1) close(socket_);
+    }
+
+    TcpStream(TcpStream&& other) noexcept
+        : socket_(other.socket_), saddr_(other.saddr_), addrlen_(other.addrlen_) {
+        other.socket_ = -1;
+    }
+
+    TcpStream& operator=(TcpStream&& other) noexcept {
+        if (this != &other) {
+            if (socket_ != -1) close(socket_);
+            socket_ = other.socket_;
+            saddr_ = other.saddr_;
+            addrlen_ = other.addrlen_;
+            other.socket_ = -1;
+        }
+        return *this;
+    }
+
+    TcpStream(const TcpStream&) = delete;
+    TcpStream& operator=(const TcpStream&) = delete;
 
     void Connect() const {
         if (const int conn = connect(socket_, reinterpret_cast<const sockaddr *>(saddr_), addrlen_); conn == -1) {
@@ -208,13 +252,16 @@ public:
         return socket_;
     }
 
-    void CloseSocket() const {
-        close(socket_);
+    void CloseSocket() {
+        if (socket_ != -1) {
+            close(socket_);
+            socket_ = -1;
+        }
     }
 
 private:
     [[maybe_unused]] int port_;
-    const int socket_;
+    int socket_;
     const sockaddr *saddr_;
     socklen_t addrlen_;
 

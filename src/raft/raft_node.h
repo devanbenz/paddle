@@ -80,6 +80,7 @@ public:
         );
 
     void SetState(NodeState state);
+    void ResetVotes();
 
     void HelloLeader(const int leader_id) { my_leader_id_ = leader_id; };
 

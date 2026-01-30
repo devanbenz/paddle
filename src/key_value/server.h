@@ -151,7 +151,7 @@ private:
 inline void run_command(
         OperationExecution data,
         std::map<std::string, std::string> &internal_store,
-        ClientAcceptor acceptor,
+        const ClientAcceptor &acceptor,
         Snapshotter &snapshotter
 ) {
     switch (data.op) {

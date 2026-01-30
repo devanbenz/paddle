@@ -33,12 +33,11 @@ int main(int argc, char *argv[]) {
 
             clients.push_back(
                     std::async(
-                            std::launch::async, [client_acceptor, &internal_store, &snapshotter, &latch]() {
+                            std::launch::async, [acc = std::move(client_acceptor), &internal_store, &snapshotter, &latch]() {
                                 while (true) {
-                                    auto msg = client_acceptor.ReceiveMessage();
+                                    auto msg = acc.ReceiveMessage();
                                     if (std::strlen(msg.data()) > 0) {
                                         if (msg == "exit") {
-                                            client_acceptor.CloseAcceptor();
                                             break;
                                         }
                                     } else {
@@ -51,10 +50,9 @@ int main(int argc, char *argv[]) {
                                     spdlog::info(get_op(data));
 
                                     latch.lock();
-                                    run_command(data, internal_store, client_acceptor, snapshotter);
+                                    run_command(data, internal_store, acc, snapshotter);
                                     latch.unlock();
                                 }
-                                client_acceptor.CloseAcceptor();
                             }));
         }
     });
